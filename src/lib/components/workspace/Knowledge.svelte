@@ -62,6 +62,7 @@
 	let page = 1;
 	let query = '';
 	let searchDebounceTimer: ReturnType<typeof setTimeout>;
+	let searchController: AbortController;
 	let viewOption = '';
 	let sourceOption = '';
 	let sortKey = 'updated_at';
@@ -86,6 +87,8 @@
 	}
 
 	const handleSearchInput = () => {
+		searchController?.abort();
+		itemsLoading = true;
 		clearTimeout(searchDebounceTimer);
 		searchDebounceTimer = setTimeout(() => {
 			init();
@@ -93,6 +96,7 @@
 	};
 
 	onDestroy(() => {
+		searchController?.abort();
 		clearTimeout(searchDebounceTimer);
 	});
 
@@ -137,6 +141,11 @@
 	};
 
 	const getItemsPage = async () => {
+		clearTimeout(searchDebounceTimer);
+		searchController?.abort();
+		searchController = new AbortController();
+		const { signal } = searchController;
+
 		itemsLoading = true;
 		const res = await searchKnowledgeBases(
 			localStorage.token,
@@ -145,10 +154,13 @@
 			page,
 			sourceOption,
 			sortKey,
-			sortDirection
+			sortDirection,
+			signal
 		).catch(() => {
 			return [];
 		});
+
+		if (signal.aborted) return;
 
 		if (res) {
 			console.log(res);
@@ -465,11 +477,17 @@
 													<Badge type="muted" content={$i18n.t('Read Only')} />
 												{/if}
 
-												<Tooltip content={dayjs(item.updated_at * 1000).format('LLLL')}>
+												<Tooltip
+													content={dayjs(item.updated_at * 1000)
+														.locale($i18n.language)
+														.format('LLLL')}
+												>
 													<div
 														class="shrink-0 truncate text-[0.6875rem] leading-5 text-gray-400 dark:text-gray-600"
 													>
-														{dayjs(item.updated_at * 1000).fromNow()}
+														{dayjs(item.updated_at * 1000)
+															.locale($i18n.language)
+															.fromNow()}
 													</div>
 												</Tooltip>
 											</div>

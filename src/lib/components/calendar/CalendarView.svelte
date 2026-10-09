@@ -3,7 +3,7 @@
 	import type { CalendarEventModel, CalendarModel } from '$lib/apis/calendar';
 	import CalendarEventChip from './CalendarEventChip.svelte';
 
-	const i18n = getContext('i18n');
+	const i18n = getContext<typeof import('$lib/i18n').default>('i18n');
 	const dispatch = createEventDispatcher();
 
 	export let events: CalendarEventModel[] = [];
@@ -11,6 +11,7 @@
 	export let visibleCalendarIds: Set<string> = new Set();
 	export let view: 'month' | 'week' | 'day' = 'month';
 	export let currentDate: Date = new Date();
+	export let onNavigate: () => void = () => {};
 
 	const NS = 1_000_000;
 	const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -112,14 +113,12 @@
 	}
 
 	function formatHour(h: number): string {
-		if (h === 0) return '12 AM';
-		if (h < 12) return `${h} AM`;
-		if (h === 12) return '12 PM';
-		return `${h - 12} PM`;
+		return new Date(2000, 0, 1, h).toLocaleTimeString($i18n.language, { hour: 'numeric' });
 	}
 
 	function handleDayClick(day: Date) {
 		currentDate = day;
+		onNavigate();
 		const ms = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9).getTime();
 		dispatch('createEvent', { start_at: ms * NS });
 	}
@@ -127,8 +126,7 @@
 	function goToDayView(day: Date) {
 		currentDate = day;
 		view = 'day';
-		dispatch('viewChange', view);
-		dispatch('navigate', { date: currentDate });
+		onNavigate();
 	}
 
 	function handleHourClick(day: Date, hour: number) {
@@ -194,7 +192,7 @@
 									class="text-[0.625rem] text-gray-400 dark:text-gray-500 px-1 mt-auto hover:text-gray-700 dark:hover:text-gray-200 text-left w-full truncate z-10"
 									on:click|stopPropagation={() => goToDayView(day)}
 								>
-									+{dayEvents.length - 3} more
+									{$i18n.t('and {{COUNT}} more', { COUNT: dayEvents.length - 3 })}
 								</div>
 							{/if}
 						</div>
@@ -271,7 +269,7 @@
 														class="text-[0.625rem] text-gray-400 dark:text-gray-500 px-1 mt-auto hover:text-gray-700 dark:hover:text-gray-200 text-left w-full truncate z-10"
 														on:click|stopPropagation={() => goToDayView(day)}
 													>
-														+{hourEvents.length - 3} more
+														{$i18n.t('and {{COUNT}} more', { COUNT: hourEvents.length - 3 })}
 													</div>
 												{/if}
 											</div>

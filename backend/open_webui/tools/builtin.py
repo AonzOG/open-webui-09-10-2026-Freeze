@@ -81,7 +81,7 @@ async def _has_write_access_to_note(note, user_id: str) -> bool:
 
     from open_webui.models.access_grants import AccessGrants
 
-    user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+    user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
     return await AccessGrants.has_access(
         user_id=user_id,
         resource_type='note',
@@ -1149,7 +1149,7 @@ async def search_notes(
 
     try:
         user_id = __user__.get('id')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         result = await Notes.search_notes(
             user_id=user_id,
@@ -1246,7 +1246,7 @@ async def view_note(
 
         # Check access permission
         user_id = __user__.get('id')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         from open_webui.models.access_grants import AccessGrants
 
@@ -2067,7 +2067,7 @@ async def list_knowledge_bases(
         from open_webui.models.knowledge import Knowledges
 
         user_id = __user__.get('id')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         result = await Knowledges.search_knowledge_bases(
             user_id,
@@ -2127,7 +2127,7 @@ async def search_knowledge_bases(
         from open_webui.models.knowledge import Knowledges
 
         user_id = __user__.get('id')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         result = await Knowledges.search_knowledge_bases(
             user_id,
@@ -2194,7 +2194,7 @@ async def search_knowledge_files(
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         # When model has attached knowledge, scope to attached KBs/files only
         if __model_knowledge__:
@@ -2663,7 +2663,7 @@ async def grep_knowledge_files(
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         # Collect files to search
         files_to_search = []
@@ -2910,7 +2910,7 @@ async def view_knowledge_file(
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         file = await Files.get_file_by_id(file_id)
         if not file:
@@ -3060,7 +3060,7 @@ async def list_knowledge(
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         knowledge_bases = []
         files = []
@@ -3201,7 +3201,7 @@ async def query_knowledge_files(
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
 
         embedding_function = getattr(__request__.app.state, 'EMBEDDING_FUNCTION', None)
         if not embedding_function:
@@ -3316,6 +3316,7 @@ async def query_knowledge_files(
                 queries=[query],
                 embedding_function=lambda queries, prefix: embedding_function(queries, prefix=prefix, user=user_model),
                 k=count,
+                user=user_model,
             )
 
             if query_results and 'documents' in query_results:
@@ -3398,7 +3399,7 @@ async def query_knowledge_bases(
         from open_webui.routers.knowledge import KNOWLEDGE_BASES_COLLECTION
 
         user_id = __user__.get('id')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
         embedding_function = getattr(__request__.app.state, 'EMBEDDING_FUNCTION', None)
         if not embedding_function:
             return JSONCodec.dumps({'error': 'Embedding function not configured'})
@@ -3484,6 +3485,7 @@ async def view_skill(
     __request__: Request = None,
     __user__: dict = None,
     __metadata__: dict = None,
+    __event_call__: callable = None,
 ) -> str:
     """
     Load the full instructions of a skill by its id from the available skills manifest.
@@ -3504,7 +3506,9 @@ async def view_skill(
             from open_webui.utils.terminals import get_terminal_skill
 
             skill_name = unquote(id.removeprefix(terminal_skill_prefix))
-            skill = await get_terminal_skill(__request__, __user__, __metadata__ or {}, skill_name)
+            skill = await get_terminal_skill(
+                __request__, __user__, __metadata__ or {}, skill_name, {'__event_call__': __event_call__}
+            )
             if not skill:
                 return JSONCodec.dumps({'error': f"Skill '{id}' not found"})
             return JSONCodec.dumps(skill, ensure_ascii=False)
@@ -3523,7 +3527,9 @@ async def view_skill(
         # Check user access
         user_role = __user__.get('role', 'user')
         if user_role != 'admin' and skill.user_id != user_id:
-            user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+            user_group_ids = [
+                group.id for group in await Groups.get_groups_by_member_id(user_id, include_inherited=True)
+            ]
             if not await AccessGrants.has_access(
                 user_id=user_id,
                 resource_type='skill',
@@ -4294,7 +4300,7 @@ async def create_calendar_event(
             from open_webui.models.access_grants import AccessGrants
             from open_webui.models.groups import Groups
 
-            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id)]
+            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
             if not await AccessGrants.has_access(
                 user_id=user_id,
                 resource_type='calendar',
@@ -4410,11 +4416,11 @@ async def update_calendar_event(
             return JSONCodec.dumps({'error': 'Event not found'})
 
         # Check write access to the event's calendar
-        if event.user_id != user_id and __user__.get('role') != 'admin':
-            cal = await Calendars.get_calendar_by_id(event.calendar_id)
-            if not cal:
-                return JSONCodec.dumps({'error': 'Access denied'})
-            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id)]
+        cal = await Calendars.get_calendar_by_id(event.calendar_id)
+        if not cal:
+            return JSONCodec.dumps({'error': 'Access denied'})
+        if cal.user_id != user_id and __user__.get('role') != 'admin':
+            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
             if not await AccessGrants.has_access(
                 user_id=user_id,
                 resource_type='calendar',
@@ -4514,11 +4520,11 @@ async def delete_calendar_event(
             return JSONCodec.dumps({'error': 'Event not found'})
 
         # Check write access
-        if event.user_id != user_id and __user__.get('role') != 'admin':
-            cal = await Calendars.get_calendar_by_id(event.calendar_id)
-            if not cal:
-                return JSONCodec.dumps({'error': 'Access denied'})
-            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id)]
+        cal = await Calendars.get_calendar_by_id(event.calendar_id)
+        if not cal:
+            return JSONCodec.dumps({'error': 'Access denied'})
+        if cal.user_id != user_id and __user__.get('role') != 'admin':
+            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id, include_inherited=True)]
             if not await AccessGrants.has_access(
                 user_id=user_id,
                 resource_type='calendar',
